@@ -1,0 +1,5 @@
+{
+  "name": "ExpenseSync",
+  "description": "A secure, user-centric mobile app that automatically extracts, categorizes, and displays wallet transactions.",
+  "requestFramePermissions": []
+}
