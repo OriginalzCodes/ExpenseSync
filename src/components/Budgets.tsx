@@ -1,12 +1,14 @@
 import { motion } from 'motion/react';
 import { Home, Utensils, Plane, Gamepad2, Plus, Edit2, AlertTriangle, TrendingUp, History, Edit3 } from 'lucide-react';
 import { Budget } from '../types';
+import { User } from 'firebase/auth';
 import { cn } from '../lib/utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface BudgetsProps {
   budgets: Budget[];
   currency: string;
+  user: User | null;
 }
 
 const forecastData = [
@@ -19,7 +21,7 @@ const forecastData = [
   { day: 'SUN', actual: 100, projected: 120 },
 ];
 
-export default function Budgets({ budgets, currency }: BudgetsProps) {
+export default function Budgets({ budgets, currency, user }: BudgetsProps) {
   const getIcon = (iconName: string) => {
     switch (iconName) {
       case 'Home': return Home;
@@ -54,7 +56,7 @@ export default function Budgets({ budgets, currency }: BudgetsProps) {
           <h1 className="text-2xl font-black text-gray-100 tracking-tighter uppercase leading-none">Sync.</h1>
         </div>
         <div className="w-12 h-12 rounded-full neu-convex overflow-hidden border-2 border-[#050506] p-0.5">
-          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full rounded-full object-cover" />
+          <img src={user?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="User" className="w-full h-full rounded-full object-cover" referrerPolicy="no-referrer" />
         </div>
       </header>
 

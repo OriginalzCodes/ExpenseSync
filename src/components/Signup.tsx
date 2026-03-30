@@ -1,6 +1,11 @@
 import { useState, FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Phone, Lock, ArrowRight, User, ShieldCheck, Github } from 'lucide-react';
+import { createUserWithEmailAndPassword, updateProfile, signInWithPopup, GoogleAuthProvider } from 'firebase/auth';
+import { doc, setDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
+import { handleFirestoreError, OperationType } from '../utils/firebase-errors';
+import { toast } from 'sonner';
 import { cn } from '../lib/utils';
 
 interface SignupProps {
@@ -14,12 +19,118 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [agreeTerms, setAgreeTerms] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!agreeTerms) return;
-    // Simulate signup
-    onSignup();
+    if (signupMethod === 'phone') {
+      toast.error("Phone registration is not implemented yet. Please use Email.");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, identifier, password);
+      const user = userCredential.user;
+
+      await updateProfile(user, { displayName: fullName });
+
+      // Create user document in Firestore
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          displayName: fullName,
+          settings: {
+            currency: 'USD',
+            notifications: true,
+            notification_preferences: {
+              budget_alerts: true,
+              transaction_summaries: true,
+              security_alerts: true,
+            },
+            auto_categorize: true,
+            privacy_mode: false,
+          }
+        });
+      } catch (fsError) {
+        handleFirestoreError(fsError, OperationType.WRITE, `users/${user.uid}`);
+      }
+
+      toast.success("Account created successfully!");
+      onSignup();
+    } catch (error: any) {
+      console.error("Signup Error:", error);
+      let message = "Failed to create account";
+      
+      // Check if it's a JSON error from handleFirestoreError
+      try {
+        if (error.message && error.message.startsWith('{')) {
+          const parsed = JSON.parse(error.message);
+          if (parsed.error) {
+            message = `Database Error: ${parsed.error}`;
+          }
+        } else {
+          // Not a JSON error, handle as Auth error
+          if (error.code === 'auth/email-already-in-use') message = "This email is already registered.";
+          else if (error.code === 'auth/invalid-email') message = "Invalid email format.";
+          else if (error.code === 'auth/weak-password') message = "Password should be at least 6 characters.";
+          else if (error.code === 'auth/operation-not-allowed') message = "Email/Password sign-in is not enabled in Firebase Console.";
+          else if (error.code === 'auth/network-request-failed') message = "Network error. Please check your connection.";
+          else if (error.message) message = error.message;
+        }
+      } catch (e) {
+        if (error.message) message = error.message;
+      }
+      
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleSignup = async () => {
+    setIsLoading(true);
+    try {
+      const provider = new GoogleAuthProvider();
+      const userCredential = await signInWithPopup(auth, provider);
+      const user = userCredential.user;
+
+      // Create user document in Firestore if it doesn't exist
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          settings: {
+            currency: 'USD',
+            notifications: true,
+            notification_preferences: {
+              budget_alerts: true,
+              transaction_summaries: true,
+              security_alerts: true,
+            },
+            auto_categorize: true,
+            privacy_mode: false,
+          }
+        }, { merge: true });
+      } catch (fsError) {
+        handleFirestoreError(fsError, OperationType.WRITE, `users/${user.uid}`);
+      }
+
+      toast.success("Signed in with Google");
+      onSignup();
+    } catch (error: any) {
+      console.error(error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error("Registration cancelled. The popup was closed before completion.");
+      } else {
+        toast.error(error.message || "Failed to sign in with Google");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -134,14 +245,20 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
 
         <button 
           type="submit"
-          disabled={!agreeTerms}
+          disabled={!agreeTerms || isLoading}
           className={cn(
             "w-full rounded-2xl py-4 font-bold text-lg flex items-center justify-center gap-2 transition-all active:scale-[0.98]",
-            agreeTerms ? "neu-button-blue text-white" : "neu-flat text-gray-600 cursor-not-allowed"
+            agreeTerms && !isLoading ? "neu-button-blue text-white" : "neu-flat text-gray-600 cursor-not-allowed"
           )}
         >
-          Create Account
-          <ArrowRight className="w-5 h-5" />
+          {isLoading ? (
+            <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <>
+              Create Account
+              <ArrowRight className="w-5 h-5" />
+            </>
+          )}
         </button>
 
         <div className="relative py-2">
@@ -154,11 +271,20 @@ export default function Signup({ onSignup, onSwitchToLogin }: SignupProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <button type="button" className="neu-flat rounded-2xl py-3 flex items-center justify-center gap-2 text-white hover:text-blue-400 transition-colors">
+          <button 
+            type="button" 
+            className="neu-flat rounded-2xl py-3 flex items-center justify-center gap-2 text-white hover:text-blue-400 transition-colors"
+            onClick={() => toast.info("Github signup coming soon!")}
+          >
             <Github className="w-5 h-5" />
             <span className="text-xs font-bold">Github</span>
           </button>
-          <button type="button" className="neu-flat rounded-2xl py-3 flex items-center justify-center gap-2 text-white hover:text-blue-400 transition-colors">
+          <button 
+            type="button" 
+            className="neu-flat rounded-2xl py-3 flex items-center justify-center gap-2 text-white hover:text-blue-400 transition-colors"
+            onClick={handleGoogleSignup}
+            disabled={isLoading}
+          >
             <div className="w-5 h-5 flex items-center justify-center font-bold text-lg">G</div>
             <span className="text-xs font-bold">Google</span>
           </button>

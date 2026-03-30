@@ -3,10 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState } from 'react';
+import React, { useState, useEffect, ErrorInfo, ReactNode } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
-import { Plus } from 'lucide-react';
+import { Plus, AlertCircle } from 'lucide-react';
+import { onAuthStateChanged, User, signOut } from 'firebase/auth';
+import { auth } from './firebase';
 import { Wallet, Transaction, Budget, UserSettings } from './types';
 import { mockWallets, mockTransactions, mockBudgets } from './data/mockData';
 import Login from './components/Login';
@@ -34,17 +36,59 @@ const initialSettings: UserSettings = {
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>('login');
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthReady, setIsAuthReady] = useState(false);
   const [wallets, setWallets] = useState<Wallet[]>(mockWallets);
   const [transactions, setTransactions] = useState<Transaction[]>(mockTransactions);
   const [selectedTransaction, setSelectedTransaction] = useState<Transaction | null>(null);
   const [settings, setSettings] = useState<UserSettings>(initialSettings);
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setIsAuthReady(true);
+      
+      if (currentUser) {
+        // If logged in and on login/signup, move to dashboard or onboarding
+        if (currentView === 'login') {
+          setCurrentView('dashboard');
+        } else if (currentView === 'signup') {
+          setCurrentView('onboarding');
+        }
+      } else {
+        // If logged out, only redirect to login if they are on a protected view
+        // Dashboard, Budgets, Settings are protected.
+        // Login, Signup, Onboarding are public/entry views.
+        const protectedViews: ViewState[] = ['budgets', 'settings', 'transaction_detail'];
+        if (protectedViews.includes(currentView)) {
+          setCurrentView('login');
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, [currentView]);
+
   const handleLogin = () => {
-    setCurrentView('onboarding');
+    if (auth.currentUser) {
+      setCurrentView('dashboard');
+    } else {
+      setCurrentView('onboarding');
+    }
   };
 
   const handleSignup = () => {
     setCurrentView('onboarding');
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      setCurrentView('login');
+    } catch (error) {
+      toast.error("Failed to sign out");
+      console.error(error);
+    }
   };
 
   const handleSwitchToSignup = () => {
@@ -134,109 +178,122 @@ export default function App() {
           },
         }}
       />
-      <AnimatePresence mode="wait">
-        {currentView === 'login' && (
-          <motion.div
-            key="login"
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 1.1 }}
-            className="flex-1 overflow-y-auto"
-          >
-            <Login onLogin={handleLogin} onSwitchToSignup={handleSwitchToSignup} />
-          </motion.div>
-        )}
+      {!isAuthReady ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="w-12 h-12 border-4 border-blue-400 border-t-transparent rounded-full animate-spin" />
+        </div>
+      ) : (
+        <AnimatePresence mode="wait">
+          {currentView === 'login' && (
+            <motion.div
+              key="login"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 1.1 }}
+              className="flex-1 overflow-y-auto"
+            >
+              <Login onLogin={handleLogin} onSwitchToSignup={handleSwitchToSignup} />
+            </motion.div>
+          )}
 
-        {currentView === 'signup' && (
-          <motion.div
-            key="signup"
-            initial={{ opacity: 0, scale: 1.1 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="flex-1 overflow-y-auto"
-          >
-            <Signup onSignup={handleSignup} onSwitchToLogin={handleSwitchToLogin} />
-          </motion.div>
-        )}
+          {currentView === 'signup' && (
+            <motion.div
+              key="signup"
+              initial={{ opacity: 0, scale: 1.1 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              className="flex-1 overflow-y-auto"
+            >
+              <Signup onSignup={handleSignup} onSwitchToLogin={handleSwitchToLogin} />
+            </motion.div>
+          )}
 
-        {currentView === 'onboarding' && (
-          <motion.div
-            key="onboarding"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex-1 overflow-y-auto"
-          >
-            <Onboarding 
-              wallets={wallets} 
-              onConnect={handleConnectWallet} 
-              onComplete={handleCompleteOnboarding} 
-            />
-          </motion.div>
-        )}
+          {currentView === 'onboarding' && (
+            <motion.div
+              key="onboarding"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex-1 overflow-y-auto"
+            >
+              <Onboarding 
+                wallets={wallets} 
+                onConnect={handleConnectWallet} 
+                onComplete={handleCompleteOnboarding} 
+              />
+            </motion.div>
+          )}
 
-        {currentView === 'dashboard' && (
-          <motion.div
-            key="dashboard"
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="flex-1 overflow-y-auto pb-40"
-          >
-            <Dashboard 
-              transactions={transactions} 
-              onViewTransaction={handleViewTransaction} 
-              currency={settings.currency}
-            />
-          </motion.div>
-        )}
+          {currentView === 'dashboard' && (
+            <motion.div
+              key="dashboard"
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 20 }}
+              className="flex-1 overflow-y-auto pb-40"
+            >
+              <Dashboard 
+                transactions={transactions} 
+                onViewTransaction={handleViewTransaction} 
+                currency={settings.currency}
+                user={user}
+              />
+            </motion.div>
+          )}
 
-        {currentView === 'transaction_detail' && selectedTransaction && (
-          <motion.div
-            key="transaction_detail"
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="absolute inset-0 z-50 bg-neu-base overflow-y-auto"
-          >
-            <TransactionDetail 
-              transaction={selectedTransaction} 
-              onClose={handleBack} 
-              currency={settings.currency}
-            />
-          </motion.div>
-        )}
+          {currentView === 'transaction_detail' && selectedTransaction && (
+            <motion.div
+              key="transaction_detail"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="absolute inset-0 z-50 bg-neu-base overflow-y-auto"
+            >
+              <TransactionDetail 
+                transaction={selectedTransaction} 
+                onClose={handleBack} 
+                currency={settings.currency}
+              />
+            </motion.div>
+          )}
 
-        {currentView === 'budgets' && (
-          <motion.div
-            key="budgets"
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -20 }}
-            className="flex-1 overflow-y-auto pb-40"
-          >
-            <Budgets budgets={mockBudgets} currency={settings.currency} />
-          </motion.div>
-        )}
+          {currentView === 'budgets' && (
+            <motion.div
+              key="budgets"
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -20 }}
+              className="flex-1 overflow-y-auto pb-40"
+            >
+              <Budgets budgets={mockBudgets} currency={settings.currency} user={user} />
+            </motion.div>
+          )}
 
-        {currentView === 'settings' && (
-          <motion.div
-            key="settings"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="flex-1 overflow-y-auto pb-24"
-          >
-            <Settings settings={settings} onUpdateSettings={handleUpdateSettings} />
-          </motion.div>
-        )}
-      </AnimatePresence>
+          {currentView === 'settings' && (
+            <motion.div
+              key="settings"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="flex-1 overflow-y-auto pb-24"
+            >
+              <Settings 
+                settings={settings} 
+                onUpdateSettings={handleUpdateSettings} 
+                onLogout={handleLogout} 
+                user={user} 
+                onAddTransactions={(newTransactions) => setTransactions(prev => [...newTransactions, ...prev])}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
+      )}
 
-      {currentView !== 'login' && currentView !== 'signup' && currentView !== 'onboarding' && currentView !== 'transaction_detail' && (
+      {isAuthReady && currentView !== 'login' && currentView !== 'signup' && currentView !== 'onboarding' && currentView !== 'transaction_detail' && (
         <BottomNav currentView={currentView} onViewChange={setCurrentView} />
       )}
 
-      {currentView === 'dashboard' && (
+      {isAuthReady && currentView === 'dashboard' && (
         <button className="absolute bottom-28 right-6 w-14 h-14 sm:w-16 sm:h-16 neu-button-blue text-white rounded-full flex items-center justify-center z-30 shadow-xl transition-all active:scale-95">
           <Plus className="w-6 h-6 sm:w-8 sm:h-8" />
         </button>

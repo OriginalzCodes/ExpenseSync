@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Search, SlidersHorizontal, Coffee, ShoppingBag, Car, Building, Plane, Plus, TrendingUp } from 'lucide-react';
 import { Transaction } from '../types';
+import { User } from 'firebase/auth';
 import { format, isToday, isYesterday, isSameMonth } from 'date-fns';
 import { cn } from '../lib/utils';
 
@@ -9,9 +10,10 @@ interface DashboardProps {
   transactions: Transaction[];
   onViewTransaction: (t: Transaction) => void;
   currency: string;
+  user: User | null;
 }
 
-export default function Dashboard({ transactions, onViewTransaction, currency: userCurrency }: DashboardProps) {
+export default function Dashboard({ transactions, onViewTransaction, currency: userCurrency, user }: DashboardProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
   const filteredTransactions = transactions.filter(t => {
@@ -101,7 +103,7 @@ export default function Dashboard({ transactions, onViewTransaction, currency: u
         </div>
         <h1 className="text-xl font-extrabold text-blue-400 tracking-tight">ExpenseSync</h1>
         <div className="w-10 h-10 rounded-full neu-convex overflow-hidden border-2 border-[#050506]">
-          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix" alt="User" className="w-full h-full object-cover" />
+          <img src={user?.photoURL || "https://api.dicebear.com/7.x/avataaars/svg?seed=Felix"} alt="User" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
         </div>
       </header>
 

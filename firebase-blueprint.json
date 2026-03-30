@@ -1,0 +1,102 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and settings",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Unique user ID" },
+        "email": { "type": "string", "format": "email", "description": "User email" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "settings": {
+          "type": "object",
+          "properties": {
+            "currency": { "type": "string" },
+            "notifications": { "type": "boolean" },
+            "notification_preferences": {
+              "type": "object",
+              "properties": {
+                "budget_alerts": { "type": "boolean" },
+                "transaction_summaries": { "type": "boolean" },
+                "security_alerts": { "type": "boolean" }
+              }
+            },
+            "auto_categorize": { "type": "boolean" },
+            "privacy_mode": { "type": "boolean" }
+          }
+        }
+      },
+      "required": ["uid", "email"]
+    },
+    "Wallet": {
+      "title": "Wallet",
+      "description": "A financial wallet or account",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string", "enum": ["bank", "crypto", "mobile"] },
+        "balance": { "type": "number" },
+        "currency": { "type": "string" },
+        "connected": { "type": "boolean" },
+        "last_synced": { "type": "string", "format": "date-time" },
+        "uid": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["id", "name", "type", "balance", "currency", "uid"]
+    },
+    "Transaction": {
+      "title": "Transaction",
+      "description": "A financial transaction",
+      "type": "object",
+      "properties": {
+        "transaction_id": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "amount": { "type": "number" },
+        "currency": { "type": "string" },
+        "merchant_name": { "type": "string" },
+        "raw_description": { "type": "string" },
+        "wallet_id": { "type": "string" },
+        "transaction_type": { "type": "string", "enum": ["debit", "credit"] },
+        "category": { "type": "string" },
+        "category_confidence": { "type": "number" },
+        "balance_after": { "type": "number" },
+        "status": { "type": "string", "enum": ["pending", "completed"] },
+        "uid": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["transaction_id", "timestamp", "amount", "currency", "merchant_name", "wallet_id", "transaction_type", "category", "uid"]
+    },
+    "Budget": {
+      "title": "Budget",
+      "description": "A monthly budget for a category",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "category": { "type": "string" },
+        "limit": { "type": "number" },
+        "spent": { "type": "number" },
+        "status": { "type": "string", "enum": ["healthy", "stable", "critical"] },
+        "icon": { "type": "string" },
+        "uid": { "type": "string", "description": "Owner UID" }
+      },
+      "required": ["id", "category", "limit", "spent", "status", "uid"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/wallets/{walletId}": {
+      "schema": "Wallet",
+      "description": "User wallets"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "User transactions"
+    },
+    "/budgets/{budgetId}": {
+      "schema": "Budget",
+      "description": "User budgets"
+    }
+  }
+}
